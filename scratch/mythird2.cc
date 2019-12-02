@@ -45,7 +45,8 @@ void
 CourseChange (std::string context, Ptr<const MobilityModel> model)
 {
   Vector position = model->GetPosition ();
-  std::cout << context << " x = " << position.x << ", y = " << position.y << std::endl;
+  NS_LOG_UNCOND (context <<
+    " x = " << position.x << ", y = " << position.y);
 }
 
 void
@@ -56,14 +57,12 @@ MyRxBegin (Ptr<const Packet> p, double rxPowerW) {
   Mac48Address dest = head.GetAddr2 ();
   uint16_t seq = head.GetSequenceNumber();
 
-  std::cout << Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW << std::endl;
+  NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW );
 }
 
 int 
 main (int argc, char *argv[])
 {
-  LogComponentEnable ("ThirdScriptExample", LOG_ALL);
-
   bool verbose = true;
   uint32_t nCsma = 3;
   uint32_t nWifi = 3;

@@ -1171,6 +1171,9 @@ public:
    * \param packet the packet being received
    */
   void NotifyRxBegin (Ptr<const Packet> packet);
+
+  void MyNotifyRxBegin (Ptr<const Packet> packet, double rxPowerW);
+
   /**
    * Public method used to fire a PhyRxEnd trace.
    * Implemented for encapsulation purposes.
@@ -1813,6 +1816,8 @@ private:
    * \see class CallBackTraceSource
    */
   TracedCallback<Ptr<const Packet> > m_phyTxBeginTrace;
+  
+  TracedCallback<Ptr<const Packet>, double> m_phyTxBeginTrace2;
 
   /**
    * The trace source fired when a packet ends the transmission process on

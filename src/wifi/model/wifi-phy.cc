@@ -351,6 +351,13 @@ WifiPhy::GetTypeId (void)
                      "in monitor mode to sniff all frames being transmitted",
                      MakeTraceSourceAccessor (&WifiPhy::m_phyMonitorSniffTxTrace),
                      "ns3::WifiPhy::MonitorSnifferTxTracedCallback")
+    .AddTraceSource ("PhyRxBegin2",
+                     "Trace source indicating a packet and power"
+                     "has begun being received from the channel medium "
+                     "by the device",
+                     MakeTraceSourceAccessor (&WifiPhy::m_phyTxBeginTrace2),
+                     "ns3::Packet::TracedCallback")
+
   ;
   return tid;
 }
@@ -2390,6 +2397,11 @@ WifiPhy::NotifyRxBegin (Ptr<const Packet> packet)
 }
 
 void
+WifiPhy::MyNotifyRxBegin (Ptr<const Packet> packet, double rxPowerW){
+  m_phyTxBeginTrace2 (packet, rxPowerW);
+}
+
+void
 WifiPhy::NotifyRxEnd (Ptr<const Packet> packet)
 {
   m_phyRxEndTrace (packet);
@@ -3821,6 +3833,9 @@ WifiPhy::StartRx (Ptr<Packet> packet, WifiTxVector txVector, MpduType mpdutype, 
       m_state->SwitchToRx (rxDuration);
       NS_ASSERT (m_endPlcpRxEvent.IsExpired ());
       NotifyRxBegin (packet);
+  
+      MyNotifyRxBegin (packet, rxPowerW);
+  
       m_interference.NotifyRxStart ();
 
       if (preamble != WIFI_PREAMBLE_NONE)
