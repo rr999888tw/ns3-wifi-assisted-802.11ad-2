@@ -52,7 +52,7 @@ Once you have completed all these steps, you can proceed with my model.
 ## Building the Project:
 The current implementation is based on ns3-26. As I changed some of the Wifi module APIs, this will affect Mesh module too. For this reason, you should disable building both examples and tests; otherwise, the build will fail. To save time and evaluate the IEEE 802.11ad model only, type the following command:
 
-    ./waf configure --disable-examples --disable-tests --disable-python --enable-modules='applications','core','internet','point-to-point','wifi','flow-monitor','spectrum'
+    ./waf configure --disable-examples --disable-tests --disable-python --enable-modules='applications','core','internet','point-to-point','wifi','flow-monitor','spectrum','csma' --enable-static
     ./waf build
 
 The previous command builds the required models only to run IEEE 802.11ad with its provided scripts in debug mode. To build the project in optimized mode for fast execution type the following command:
