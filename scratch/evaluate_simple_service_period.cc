@@ -99,7 +99,7 @@ int
 main (int argc, char *argv[])
 {
   uint32_t packetSize = 1448;                   /* Transport Layer Payload size in bytes. */
-  string dataRate = "300Mbps";                  /* Application Layer Data Rate. */
+  string dataRate = "2Gbps";                  /* Application Layer Data Rate. */
   uint64_t maxPackets = 0;                      /* The maximum number of packets to transmit. */
   uint32_t msduAggregationSize = 7935;          /* The maximum aggregation size for A-MSDU in Bytes. */
   uint32_t queueSize = 10000;                   /* Wifi Mac Queue Size. */
@@ -179,7 +179,7 @@ main (int argc, char *argv[])
                    "BE_MaxAmpduSize", UintegerValue (0),
                    "BE_MaxAmsduSize", UintegerValue (msduAggregationSize),
                    "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (8),
-                   "BeaconInterval", TimeValue (MicroSeconds (102400)),
+                   "BeaconInterval", TimeValue (MicroSeconds (1024*5)),
                    "ATIPresent", BooleanValue (false));
 
   /* Set Analytical Codebook for the DMG Devices */

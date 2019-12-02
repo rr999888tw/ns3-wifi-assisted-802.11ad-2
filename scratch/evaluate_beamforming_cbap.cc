@@ -128,7 +128,9 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, Mac48Address address, ChannelAccessPeriod
 void
 ActiveTxSectorIDChanged (Ptr<DmgWifiMac> wifiMac, SectorID oldSectorID, SectorID newSectorID)
 {
-//  std::cout << "DMG STA: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID) << std::endl;
+  std::cout << "DMG STA: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID) << std::endl;
+  if (newSectorID != 1)
+    wifiMac->GetCodebook()-> SetActiveTxSectorID(1);
 }
 
 int
@@ -138,16 +140,16 @@ main (int argc, char *argv[])
   string applicationType = "bulk";              /* Type of the Tx application */
   string socketType = "ns3::TcpSocketFactory";  /* Socket Type (TCP/UDP) */
   uint32_t packetSize = 1448;                   /* Application payload size in bytes. */
-  string dataRate = "300Mbps";                  /* Application data rate. */
+  string dataRate = "8000Mbps";                  /* Application data rate. */
   string tcpVariant = "NewReno";                /* TCP Variant Type. */
-  uint32_t bufferSize = 131072;                 /* TCP Send/Receive Buffer Size. */
+  uint32_t bufferSize = 131072000;                 /* TCP Send/Receive Buffer Size. */
   uint32_t maxPackets = 0;                      /* Maximum Number of Packets */
   uint32_t msduAggregationSize = 0;             /* The maximum aggregation size for A-MSDU in Bytes. */
   uint32_t mpduAggregationSize = 3000;         /* The maximum aggregation size for A-MSPU in Bytes. */
-  uint32_t queueSize = 1000;                    /* Wifi MAC Queue Size. */
+  uint32_t queueSize = 1000000;                    /* Wifi MAC Queue Size. */
   string phyMode = "DMG_MCS12";                 /* Type of the Physical Layer. */
   bool verbose = false;                         /* Print Logging Information. */
-  double simulationTime = 10;                   /* Simulation time in seconds. */
+  double simulationTime = 3;                   /* Simulation time in seconds. */
   bool pcapTracing = false;                     /* PCAP Tracing is enabled or not. */
   std::map<std::string, std::string> tcpVariants; /* List of the tcp Variants */
 
@@ -258,7 +260,7 @@ main (int argc, char *argv[])
                    "BE_MaxAmpduSize", UintegerValue (mpduAggregationSize),
                    "BE_MaxAmsduSize", UintegerValue (msduAggregationSize),
                    "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (8),
-                   "BeaconInterval", TimeValue (MicroSeconds (102400)),
+                   "BeaconInterval", TimeValue (MicroSeconds (1024000)),
                    "ATIPresent", BooleanValue (false));
 
   /* Set Analytical Codebook for the DMG Devices */
@@ -308,7 +310,7 @@ main (int argc, char *argv[])
   if (activateApp)
     {
       /* Install Simple UDP Server on the DMG AP */
-      PacketSinkHelper sinkHelper (socketType, InetSocketAddress (Ipv4Address::GetAny (), 9999));
+      PacketSinkHelper sinkHelper (socketType, InetSocketAddress (apInterface.GetAddress(0), 9999));
       ApplicationContainer sinkApp = sinkHelper.Install (apNode);
       packetSink = StaticCast<PacketSink> (sinkApp.Get (0));
       sinkApp.Start (Seconds (0.0));

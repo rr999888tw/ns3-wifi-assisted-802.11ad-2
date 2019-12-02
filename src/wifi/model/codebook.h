@@ -193,7 +193,7 @@ protected:
   uint8_t GetActiveTxPatternID (void) const;
   uint8_t GetActiveRxPatternID (void) const;
 
-private:
+public:
   uint8_t GetNumberOfSectors (Mac48Address address, BeamformingSectorList &list);
   uint8_t CountNumberOfSectors (Antenna2SectorList *sectorList);
   void AppendToSectorList (Antenna2SectorList &globalList, AntennaID antennaID, SectorID sectorID);
