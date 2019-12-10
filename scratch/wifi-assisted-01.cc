@@ -11,6 +11,15 @@
 #include "ns3/wifi-module.h"
 #include "common-functions.h"
 
+#include "ns3/yans-wifi-helper.h"
+#include "ns3/ssid.h"
+#include "ns3/wifi-net-device.h"
+#include "ns3/wifi-mac-header.h"
+
+#include <math.h>       /* atan */
+#include <complex.h>       /* atan */
+
+
 /**
  * Simulation Objective:
  * This script is used to evaluate the throughput achieved using a simple allocation of a static
@@ -60,13 +69,70 @@ NetDeviceContainer staDevices;
 
 /*** Service Periods ***/
 uint16_t spDuration = 3200;               /* The duration of the allocated service period in MicroSeconds */
+const Time beaconInterval = MilliSeconds(5);
+SectorID apSectorId = 1;
+SectorID staSectorId = 1;
+
+void
+SetSectors()
+{
+  Ptr<Codebook> apCodebook = StaticCast<DmgApWifiMac> (apWifiNetDevice->GetMac ())->GetCodebook();
+  Ptr<Codebook> staCodebook = StaticCast<DmgApWifiMac> (staWifiNetDevice->GetMac ())->GetCodebook();
+  
+  apCodebook ->SetActiveTxSectorID(::apSectorId);
+  staCodebook ->SetActiveTxSectorID(::staSectorId);
+
+  Simulator::Schedule (beaconInterval, &SetSectors);
+  
+  return ;
+}
+
+void
+CourseChange (std::string context, Ptr<const MobilityModel> model)
+{
+  Vector position = model->GetPosition ();
+  NS_LOG_UNCOND (context <<
+    " x = " << position.x << ", y = " << position.y);
+
+  double xdel = position.x - 0.2;
+  double ydel = position.y;
+  Complex a = Complex(xdel, ydel);
+  double ang = arg(a) * 180 / M_PI;
+  if (ang < 0)
+    ang += 360;
+    
+  double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
+
+  ::staSectorId = int(ceil(ang/45));
+  ::apSectorId = int(ceil(reang/45));
+  
+  NS_LOG_UNCOND ("xdel = " << xdel );
+  NS_LOG_UNCOND ("ydel = " << ydel );
+  NS_LOG_UNCOND ("angle = " << ang  << " reang = " << reang);
+  NS_LOG_UNCOND ("staSectorID = " << int(::staSectorId));
+  NS_LOG_UNCOND ("apSectorID = " << int(::apSectorId));
+
+}
+
+
+void
+MyRxBegin (Ptr<const Packet> p, double rxPowerW) { 
+
+  WifiMacHeader head;
+  p->PeekHeader (head);
+  Mac48Address dest = head.GetAddr2 ();
+  uint16_t seq = head.GetSequenceNumber();
+
+  NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW );
+}
+
 
 void
 CalculateThroughput (Ptr<PacketSink> sink, uint64_t lastTotalRx, double averageThroughput)
 {
   Time now = Simulator::Now ();                                         /* Return the simulator's virtual time. */
   double cur = (sink->GetTotalRx() - lastTotalRx) * (double) 8/1e5;     /* Convert Application RX Packets to MBits. */
-  std::cout << now.GetSeconds () << '\t' << cur << std::endl;
+  NS_LOG_UNCOND ("throughput: " << now.GetSeconds () << '\t' << cur ) ;
   lastTotalRx = sink->GetTotalRx ();
   averageThroughput += cur;
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput, sink, lastTotalRx, averageThroughput);
@@ -165,9 +231,13 @@ main (int argc, char *argv[])
 
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
-  wifiNodes.Create (2);
+  wifiNodes.Create (3);
   Ptr<Node> apNode = wifiNodes.Get (0);
   Ptr<Node> staNode = wifiNodes.Get (1);
+  Ptr<Node> staNode2 = wifiNodes.Get (2);
+  NodeContainer staNodes;
+  staNodes.Add(staNode);
+  staNodes.Add(staNode2);
 
   /* Add a DMG upper mac */
   DmgWifiMacHelper wifiMac = DmgWifiMacHelper::Default ();
@@ -179,7 +249,7 @@ main (int argc, char *argv[])
                    "BE_MaxAmpduSize", UintegerValue (0),
                    "BE_MaxAmsduSize", UintegerValue (msduAggregationSize),
                    "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (8),
-                   "BeaconInterval", TimeValue (MicroSeconds (1024*5)),
+                   "BeaconInterval", TimeValue (MicroSeconds (1024*10)),
                    "ATIPresent", BooleanValue (false));
 
   /* Set Analytical Codebook for the DMG Devices */
@@ -199,15 +269,83 @@ main (int argc, char *argv[])
 
   staDevices = wifi.Install (wifiPhy, wifiMac, staNode);
 
+
+
+
+
+
+
+
+
+  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+  phy.SetChannel (channel.Create ());
+
+  WifiHelper mywifi;
+  mywifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+
+  WifiMacHelper mac;
+  Ssid ssid2 = Ssid ("ns-3-ssid");
+  mac.SetType ("ns3::StaWifiMac",
+               "Ssid", SsidValue (ssid2),
+               "ActiveProbing", BooleanValue (false));
+
+  NetDeviceContainer staWifiDev;
+  staWifiDev = mywifi.Install (phy, mac, staNodes);
+
+  for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
+    Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
+    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
+  }
+
+  mac.SetType ("ns3::ApWifiMac",
+               "Ssid", SsidValue (ssid2),
+               "BeaconInterval", TimeValue (beaconInterval)
+               );
+
+
+
+  NetDeviceContainer apWifiDev;
+  apWifiDev = mywifi.Install (phy, mac, apNode);
+  
+
+
+
+
+
   /* Setting mobility model */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.0, 0.0, 0.0));   /* PCP/AP */
-  positionAlloc->Add (Vector (1.0, 0.0, 0.0));   /* DMG STA */
+//   positionAlloc->Add (Vector (5.0, 5.0, 0.0));   /* PCP/AP */
+  positionAlloc->Add (Vector (0.2, 0.0, 0.0));   /* DMG STA */
+  positionAlloc->Add (Vector (-0.2, 0.0, 0.0));   /* DMG STA 2*/
 
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wifiNodes);
+  mobility.Install (staNodes);
+
+  positionAlloc = CreateObject<ListPositionAllocator> ();
+  positionAlloc->Add (Vector (-3.0, 0.1, 0.0));
+  mobility.SetPositionAllocator (positionAlloc);
+  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                             "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
+                            );
+  mobility.Install (apNode);
+
+
+
+
+  std::ostringstream oss;
+  oss <<
+    "/NodeList/" << apNode->GetId() <<
+    "/$ns3::MobilityModel/CourseChange";
+  
+  Config::Connect (oss.str (), MakeCallback (&CourseChange));
+
+
+
+
+
 
   /* Internet stack*/
   InternetStackHelper stack;
@@ -254,6 +392,7 @@ main (int argc, char *argv[])
 
   /* Schedule Throughput Calulcations */
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput, packetSink, staNodeLastTotalRx, staNodeAverageThroughput);
+  Simulator::Schedule (Seconds (1.2), &SetSectors);
 
   /* Set Maximum number of packets in WifiMacQueue */
   Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/MaxPackets", UintegerValue (queueSize));
