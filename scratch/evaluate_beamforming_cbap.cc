@@ -30,7 +30,7 @@
  *
  * Running the Simulation:
  * To run the script with the default parameters:
- * ./waf --run "evaluate_beamforming_cbap
+ * ./waf --run "evaluate_beamforming_cbap"
  *
  * Simulation Output:
  * The simulation generates the following traces:
@@ -377,29 +377,29 @@ main (int argc, char *argv[])
     }
 
   /* Schedule many TxSS CBAP during data transmission. */
-  Simulator::Schedule (Seconds (2.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (2.3), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (2.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (2.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (2.9), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (3.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (3.6), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (4.2), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (4.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (4.8), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (5.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (5.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (5.2), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (5.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (5.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (6.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (6.32), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (6.567), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (7.123), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (8.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (8.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (8.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-  Simulator::Schedule (Seconds (8.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (2.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (2.3), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (2.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (2.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (2.9), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (3.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (3.6), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (4.2), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (4.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (4.8), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (5.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (5.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (5.2), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (5.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (5.7), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (6.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (6.32), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (6.567), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (7.123), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (8.0), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (8.1), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (8.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+  // Simulator::Schedule (Seconds (8.5), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
 
   Simulator::Stop (Seconds (simulationTime + 0.101));
   Simulator::Run ();

@@ -176,13 +176,12 @@ main (int argc, char *argv[])
 
 
 
-
-
   mac.SetType ("ns3::ApWifiMac",
                "Ssid", SsidValue (ssid));
 
   NetDeviceContainer apDevices;
   apDevices = wifi.Install (phy, mac, wifiApNode);
+
   
 
   MobilityHelper mobility;
