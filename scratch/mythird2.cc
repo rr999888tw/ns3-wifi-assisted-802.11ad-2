@@ -25,6 +25,9 @@
 #include "ns3/ssid.h"
 #include "ns3/wifi-net-device.h"
 #include "ns3/wifi-mac-header.h"
+#include "Eigen/Dense"
+#include <complex>       
+#include <map> 
 
 // Default Network Topology
 //
@@ -37,32 +40,65 @@
 //                                   ================
 //                                     LAN 10.1.2.0
 
+using namespace Eigen;
 using namespace ns3;
+using namespace std;
 
 NS_LOG_COMPONENT_DEFINE ("ThirdScriptExample");
+
+
+ArrayXd music_algo(double* time, double* power,int numb_ante, int snap, int sour);
+
+const uint M = 3;
+const uint snapshots = 10;
+const uint source_no = 1;
+
+double arrival_time[M][snapshots][source_no];
+double arrival_power[M][snapshots][source_no];
+
+map<Address, uint> addrMap; 
+
 
 void
 CourseChange (std::string context, Ptr<const MobilityModel> model)
 {
-  Vector position = model->GetPosition ();
+  ns3::Vector position = model->GetPosition ();
   NS_LOG_UNCOND (context <<
     " x = " << position.x << ", y = " << position.y);
 }
 
 void
-MyRxBegin (Ptr<const Packet> p, double rxPowerW) { 
-
+MyRxBegin (Ptr<WifiNetDevice> net, Ptr<const Packet> p, double rxPowerW) { 
+  
   WifiMacHeader head;
   p->PeekHeader (head);
-  Mac48Address dest = head.GetAddr2 ();
+  Address dest = net->GetAddress();  
   uint16_t seq = head.GetSequenceNumber();
 
-  NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW );
+  if (addrMap.find(dest) == addrMap.end()){
+    addrMap.insert(pair<Address, uint> (dest, addrMap.size()));
+  }
+  
+  NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received at " << dest << " with power = " << rxPowerW );
+  NS_LOG_UNCOND ( addrMap.at(dest) );
+
 }
 
 int 
 main (int argc, char *argv[])
 {
+
+
+  Eigen::MatrixXd m(2,2);
+  m(0,0) = 3;
+  m(1,0) = 2.5;
+  m(0,1) = -1;
+  m(1,1) = m(1,0) + m(0,1);
+  std::cout << m << std::endl;
+
+
+
+
   bool verbose = true;
   uint32_t nCsma = 3;
   uint32_t nWifi = 3;
@@ -135,9 +171,8 @@ main (int argc, char *argv[])
   for (NetDeviceContainer::Iterator it = staDevices.Begin(); it != staDevices.End(); ++it){
 
     Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
-    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
+    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeBoundCallback (&MyRxBegin, wifinetdev));
   }
-
 
 
 
@@ -224,4 +259,110 @@ main (int argc, char *argv[])
   Simulator::Run ();
   Simulator::Destroy ();
   return 0;
+}
+
+
+
+
+
+
+
+ArrayXd music_algo(double *time, double *power,int numb_ante, int snap, int sour){
+    const std::complex<double> z(0, 1);
+    int M = numb_ante; /* Number of antenna elements */
+    double frequency = 2.4e9;
+    double c = 3e8;
+    double wavelength = c/frequency; /* In units of meters */
+    double seperation = wavelength*0.5;
+    int angular_profile = 180; /* in number of intervals from 0 to 180*/
+
+    ArrayXd angle(angular_profile);
+    for (int i = 0; i<angular_profile; i++){
+        angle(i) = i*180/angular_profile;
+    }
+
+    MatrixXcd sensor_matrix(numb_ante,snap);
+    sensor_matrix = MatrixXcd::Zero(numb_ante,snap);
+    ArrayXcd calibration(snap);
+
+    MatrixXcd sensor_covariance(M,M);
+    sensor_covariance = MatrixXcd::Zero(M,M);
+
+    MatrixXcd E_matrix(M,M);
+     E_matrix = MatrixXcd::Zero(M,M);
+
+    MatrixXd posantenna(2,M);
+    for (int i = 0; i<M; i++){
+        posantenna(0,i) = i*seperation;
+        posantenna(1,i) = 0;
+    }
+    
+    MatrixXd anti_sym(M,M);
+    anti_sym = MatrixXd::Zero(M,M);
+    for(int i = 0; i<M;i++){
+        for(int j = 0; j<M;j++){
+            if (j+i == M-1){
+                anti_sym(i,j) = 1;
+            }
+        }
+    }
+
+    MatrixXcd atheta(M,angular_profile);
+    for (int i = 0; i<M;i++){
+        for (int j = 0; j<angular_profile;j++){
+            Vector2d vec(cos(angle(j)),sin(angle(j)));
+            double phase = -vec.dot(posantenna.col(i))/wavelength*2*M_PI;
+            atheta(i,j) = exp(z*phase);
+        }
+    }
+    
+    
+    for (int i  = 0; i<numb_ante; i++){
+        for (int j = 0; j<snap;j++){
+            for (int k = 0; k<sour;k++){
+                double t = *(time+(i*snap + j)*sour+k);
+                double p = *(power+(i*snap + j)*sour+k);
+                sensor_matrix(i,j) = sensor_matrix(i,j) + exp(z*2.0*M_PI*t)*p;
+            }
+        }
+    }
+    for (int j = 0; j<snap; j++){
+        calibration(j) = exp(-z*arg(sensor_matrix(0,j)));
+    }
+    for (int i = 0; i<numb_ante;i++){
+        sensor_matrix.row(i) << sensor_matrix.row(i).array() * calibration.transpose();
+    }
+
+    for (int j = 0; j<snap; j++){
+    sensor_covariance = sensor_covariance + (anti_sym * sensor_matrix.col(j).adjoint().transpose())*(anti_sym * sensor_matrix.col(j).adjoint().transpose()).adjoint()/snap + sensor_matrix.col(j) * (sensor_matrix.col(j)).adjoint()/snap;
+    }
+
+    cout << sensor_covariance << endl << endl;
+    SelfAdjointEigenSolver<MatrixXcd> eigensolver(sensor_covariance);
+    if (eigensolver.info() != Success) abort();    
+
+    int number_of_sig = 3;
+    for (int i = 0; i<M; i++){
+        if(eigensolver.eigenvalues()(i) < eigensolver.eigenvalues().maxCoeff()/100){
+            E_matrix.col(i) = eigensolver.eigenvectors().col(i);
+            number_of_sig--;            
+        }       
+    }
+
+    ArrayXd spatial_metric(angular_profile); 
+
+    for(int i = 0;i<angular_profile;i++){
+        spatial_metric(i) = 1/(atheta.col(i).adjoint()*E_matrix*E_matrix.adjoint()*atheta.col(i))(0,0).real();
+    }
+    spatial_metric = spatial_metric/spatial_metric.maxCoeff();
+
+
+    cout << "The eigenvalues are:\n" << eigensolver.eigenvalues()<< endl;
+    cout << "Here's a matrix whose columns are eigenvectors \n"
+        << "corresponding to these eigenvalues:\n"
+        << eigensolver.eigenvectors() << endl;
+    cout << "There are " << number_of_sig << " signals arriving" << endl<<endl;
+    // cout << atheta.block(0,174,4,3) << endl;
+
+    return spatial_metric; 
 }
