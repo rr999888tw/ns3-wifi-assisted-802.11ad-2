@@ -1,7 +1,9 @@
 {
     "files.associations": {
         "iostream": "cpp",
-        "complex": "cpp"
+        "complex": "cpp",
+        "dense": "cpp",
+        "eigenvalues": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }

@@ -67,14 +67,24 @@ Ptr<DmgApWifiMac> apWifiMac;
 Ptr<DmgStaWifiMac> staWifiMac;
 NetDeviceContainer staDevices;
 
+Ptr<WifiNetDevice> myApWifiNetDevice;
+Ptr<ApWifiMac> myApWifiMac;
+
 /*** Service Periods ***/
-uint16_t spDuration = 3200;               /* The duration of the allocated service period in MicroSeconds */
 const Time beaconInterval = MilliSeconds(1);
+const double c = 3e8;
+const double frequency = 5.18e9;
+const double wavelength = c/frequency;
+
+
+uint16_t spDuration = 3200;               /* The duration of the allocated service period in MicroSeconds */
 SectorID apSectorId = 1;
 SectorID staSectorId = 1;
 uint8_t slsCounter = 0;
 int64_t slsMilliSec = 0;
 Time sweepTime = Time(0);
+
+
 
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
@@ -156,8 +166,8 @@ CourseChange (std::string context, Ptr<const MobilityModel> model)
     
   double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
 
-  ::staSectorId = int(ceil(ang/45));
-  ::apSectorId = int(ceil(reang/45));
+  ::staSectorId = int(ceil(ang/45.0));
+  ::apSectorId = int(ceil(reang/45.0));
   
   NS_LOG_UNCOND ("xdel = " << xdel );
   NS_LOG_UNCOND ("ydel = " << ydel );
@@ -170,14 +180,19 @@ CourseChange (std::string context, Ptr<const MobilityModel> model)
 
 
 void
-MyRxBegin (Ptr<const Packet> p, double rxPowerW) { 
+MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) { 
 
-//   WifiMacHeader head;
-//   p->PeekHeader (head);
-//   Mac48Address dest = head.GetAddr2 ();
-//   uint16_t seq = head.GetSequenceNumber();
+  WifiMacHeader head;
+  p->PeekHeader (head);
+  Mac48Address dst = head.GetAddr1 ();
+  Mac48Address src = head.GetAddr2 ();
+  Mac48Address broadcast = Mac48Address("ff:ff:ff:ff:ff:ff");
+  Mac48Address rx = wifinet->GetMac() ->GetAddress();
+  uint16_t seq = head.GetSequenceNumber();
+  bool skipCond = !(src == myApWifiMac->GetAddress() && dst == broadcast );
+  if (skipCond) return;
 
-//   NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW );
+  NS_LOG_UNCOND (Simulator::Now() << " rx = " << rx << " seq : " << seq << " packet received from src = " << src << " with power = " << rxPowerW );
 }
 
 
@@ -296,13 +311,18 @@ main (int argc, char *argv[])
 
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
-  wifiNodes.Create (3);
+  wifiNodes.Create (5);
   Ptr<Node> apNode = wifiNodes.Get (0);
   Ptr<Node> staNode = wifiNodes.Get (1);
   Ptr<Node> staNode2 = wifiNodes.Get (2);
+  Ptr<Node> staNode3 = wifiNodes.Get (3);
+  Ptr<Node> staNode4 = wifiNodes.Get (4);
+
   NodeContainer staNodes;
   staNodes.Add(staNode);
   staNodes.Add(staNode2);
+  staNodes.Add(staNode3);
+  staNodes.Add(staNode4);
 
   /* Add a DMG upper mac */
   DmgWifiMacHelper wifiMac = DmgWifiMacHelper::Default ();
@@ -360,7 +380,7 @@ main (int argc, char *argv[])
 
   for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
     Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
-    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
+    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeBoundCallback (&MyRxBegin, wifinetdev));
   }
 
   mac.SetType ("ns3::ApWifiMac",
@@ -368,11 +388,13 @@ main (int argc, char *argv[])
                "BeaconInterval", TimeValue (beaconInterval)
                );
 
-
-
   NetDeviceContainer apWifiDev;
   apWifiDev = mywifi.Install (phy, mac, apNode);
-  
+
+
+  myApWifiNetDevice = StaticCast<WifiNetDevice> (apWifiDev.Get (0));
+  myApWifiMac = StaticCast<ApWifiMac> (myApWifiNetDevice->GetMac ());
+
 
 
 
@@ -381,22 +403,23 @@ main (int argc, char *argv[])
   /* Setting mobility model */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-//   positionAlloc->Add (Vector (5.0, 5.0, 0.0));   /* PCP/AP */
-  positionAlloc->Add (Vector (0.2, 0.0, 0.0));   /* DMG STA */
-  positionAlloc->Add (Vector (-0.2, 0.0, 0.0));   /* DMG STA 2*/
+  
+  for (double i = 0 ; i < staNodes.GetN(); ++i){
+    positionAlloc ->Add (Vector(i * wavelength, 0.0, 0.0));
+  }
 
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (staNodes);
 
   positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.21, 0.01, 0.0));
+  positionAlloc->Add (Vector (5, 5, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
-//   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
-                            );
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                            //  "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
+                            // );
   mobility.Install (apNode);
 
 
