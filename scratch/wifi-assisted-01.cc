@@ -71,6 +71,7 @@ NetDeviceContainer staDevices;
 
 Ptr<WifiNetDevice> myApWifiNetDevice;
 Ptr<ApWifiMac> myApWifiMac;
+NetDeviceContainer myStaDevices;
 
 /*** Service Periods ***/
 const Time beaconInterval = MilliSeconds(1);
@@ -206,8 +207,15 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
   bool skipCond = !(src == myApWifiMac->GetAddress() && dst == broadcast );
   if (skipCond) return;
 
-  if (addrMap.find(rx) == addrMap.end()){
-    addrMap.insert(pair<Mac48Address, uint> (rx, addrMap.size()));
+  if (addrMap.empty()) {
+    for (uint i = 0; i < myStaDevices.GetN(); ++i){
+      Mac48Address tmpaddr = StaticCast<WifiNetDevice>(myStaDevices.Get(i)) ->GetMac() ->GetAddress();
+      addrMap.insert(pair<Mac48Address, uint> (tmpaddr, i));
+    }    
+  } else {
+    for (auto it = addrMap.begin(); it != addrMap.end(); ++it){
+      NS_LOG_UNCOND (" first = " << it ->first << " second = " << it->second);
+    }
   }
 
   uint no = addrMap.at(rx);
@@ -254,15 +262,15 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
 
     ArrayXd analysisArr = music_algo(arrival_time[0][0], arrival_power[0][0], M, snapshots, source_no);    
 
-    
     // vector<double> vec;
     // for (auto it = analysisArr.begin(); it != analysisArr.end(); ++it) vec.push_back(*it);
     // vector<int> localmax = FindLocalMax(vec);
     // for (auto it = localmax.begin(); it != localmax.end(); ++it){
     //   NS_LOG_UNCOND("local max = " << *it); 
     // }
+
     NS_LOG_UNCOND ("max = " << std::distance(analysisArr.begin(), std::max_element(analysisArr.begin(), analysisArr.end()))) ;
-    
+
     arrival_counter = vector<int> (M, 0);
   }
 
@@ -440,10 +448,10 @@ main (int argc, char *argv[])
                "Ssid", SsidValue (ssid2),
                "ActiveProbing", BooleanValue (false));
 
-  NetDeviceContainer staWifiDev;
-  staWifiDev = mywifi.Install (phy, mac, staNodes);
+  
+  myStaDevices = mywifi.Install (phy, mac, staNodes);
 
-  for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
+  for (NetDeviceContainer::Iterator it = myStaDevices.Begin(); it != myStaDevices.End(); ++it){
     Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
     wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeBoundCallback (&MyRxBegin, wifinetdev));
   }
@@ -478,7 +486,7 @@ main (int argc, char *argv[])
   mobility.Install (staNodes);
 
   positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (ns3::Vector (8.0, 5.0, 0.0));
+  positionAlloc->Add (ns3::Vector (4.0, 4.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -496,7 +504,6 @@ main (int argc, char *argv[])
     "/$ns3::MobilityModel/CourseChange";
   
   Config::Connect (oss.str (), MakeCallback (&CourseChange));
-
 
 
 
@@ -710,6 +717,7 @@ ArrayXd music_algo(double *time, double *power,int numb_ante, int snap, int sour
         if(eigensolver.eigenvalues()(i) < eigensolver.eigenvalues().maxCoeff()/100){
             E_matrix.col(i) = eigensolver.eigenvectors().col(i);
             number_of_sig--;            
+
         }       
     }
 
