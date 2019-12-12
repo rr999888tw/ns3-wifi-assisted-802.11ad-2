@@ -255,6 +255,7 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
       for (uint j = 0; j < snapshots; ++j){
         for (uint k = 0; k < source_no; ++k){
           arrival_power[i][j][k] = arrival_power[i][j][k] / minPowerW;
+
           NS_LOG_UNCOND ("arrival power = " << arrival_power[i][j][k]);
         }
       }
@@ -560,12 +561,12 @@ main (int argc, char *argv[])
   Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/MaxPackets", UintegerValue (queueSize));
 
   /* Connect Wifi MAC Queue Occupancy */
-  AsciiTraceHelper asciiTraceHelper;
-  Ptr<OutputStreamWrapper> queueOccupanyStream;
+  // AsciiTraceHelper asciiTraceHelper;
+  // Ptr<OutputStreamWrapper> queueOccupanyStream;
   /* Trace DMG PCP/AP MAC Queue Changes */
-  queueOccupanyStream = asciiTraceHelper.CreateFileStream ("Traces/AccessPointMacQueueOccupany.txt");
-  Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/OccupancyChanged",
-                                 MakeBoundCallback (&QueueOccupancyChange, queueOccupanyStream));
+  // queueOccupanyStream = asciiTraceHelper.CreateFileStream ("Traces/AccessPointMacQueueOccupany.txt");
+  // Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/OccupancyChanged",
+  //                                MakeBoundCallback (&QueueOccupancyChange, queueOccupanyStream));
 
   /* Enable Traces */
   if (pcapTracing)
