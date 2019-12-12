@@ -19,7 +19,8 @@
 #include <math.h>       /* atan */
 #include <complex.h>       /* atan */
 #include <assert.h>
-
+#include "Eigen/Dense"
+#include <stdio.h>
 /**
  * Simulation Objective:
  * This script is used to evaluate the throughput achieved using a simple allocation of a static
@@ -54,6 +55,7 @@
 
 NS_LOG_COMPONENT_DEFINE ("EvaluateSimpleServicePeriod");
 
+using namespace Eigen;
 using namespace ns3;
 using namespace std;
 
@@ -86,6 +88,21 @@ Time sweepTime = Time(0);
 
 
 
+const int M = 4;
+const int snapshots = 100;
+const int source_no = 1;
+
+double arrival_time[M][snapshots][source_no];
+double arrival_power[M][snapshots][source_no];
+vector<int> arrival_counter (M, 0);
+
+
+map<Mac48Address, uint> addrMap; 
+
+ArrayXd music_algo(double* time, double* power,int numb_ante, int snap, int sour);
+vector<int> FindLocalMax(vector<double> &vec);
+
+
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
 {
@@ -102,9 +119,6 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, Mac48Address address, ChannelAccessPeriod
   std::cout << "The best antenna configuration is SectorID=" << uint32_t (sectorId)
                 << ", AntennaID=" << uint32_t (antennaId) << std::endl;
 
-//   ++::slsCounter;
-//   int64_t  millisec = (staWifiMac-> CalculateSectorSweepDuration(8)).GetMilliSeconds();
-//   ::slsMilliSec += 
   NS_LOG_UNCOND ("slscompleted" );
 }
 
@@ -153,29 +167,29 @@ SetSectors()
 void
 CourseChange (std::string context, Ptr<const MobilityModel> model)
 {
-  Vector position = model->GetPosition ();
-  NS_LOG_UNCOND (context <<
-    " x = " << position.x << ", y = " << position.y);
+  // ns3::Vector position = model->GetPosition ();
+  // NS_LOG_UNCOND (context <<
+  //   " x = " << position.x << ", y = " << position.y);
 
-  double xdel = position.x - 0.2;
-  double ydel = position.y;
-  Complex a = Complex(xdel, ydel);
-  double ang = arg(a) * 180 / M_PI;
-  if (ang < 0)
-    ang += 360;
+  // double xdel = position.x - 0.2;
+  // double ydel = position.y;
+  // Complex a = Complex(xdel, ydel);
+  // double ang = arg(a) * 180 / M_PI;
+  // if (ang < 0)
+  //   ang += 360;
     
-  double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
+  // double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
 
-  ::staSectorId = int(ceil(ang/45.0));
-  ::apSectorId = int(ceil(reang/45.0));
+  // ::staSectorId = int(ceil(ang/45.0));
+  // ::apSectorId = int(ceil(reang/45.0));
   
-  NS_LOG_UNCOND ("xdel = " << xdel );
-  NS_LOG_UNCOND ("ydel = " << ydel );
-  NS_LOG_UNCOND ("angle = " << ang  << " reang = " << reang);
-  NS_LOG_UNCOND ("staSectorID = " << int(::staSectorId));
-  NS_LOG_UNCOND ("apSectorID = " << int(::apSectorId));
+  // NS_LOG_UNCOND ("xdel = " << xdel );
+  // NS_LOG_UNCOND ("ydel = " << ydel );
+  // NS_LOG_UNCOND ("angle = " << ang  << " reang = " << reang);
+  // NS_LOG_UNCOND ("staSectorID = " << int(::staSectorId));
+  // NS_LOG_UNCOND ("apSectorID = " << int(::apSectorId));
   
-  Simulator::ScheduleNow(&SetSectors);
+  // Simulator::ScheduleNow(&SetSectors);
 }
 
 
@@ -191,6 +205,66 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
   uint16_t seq = head.GetSequenceNumber();
   bool skipCond = !(src == myApWifiMac->GetAddress() && dst == broadcast );
   if (skipCond) return;
+
+  if (addrMap.find(rx) == addrMap.end()){
+    addrMap.insert(pair<Mac48Address, uint> (rx, addrMap.size()));
+  }
+
+  uint no = addrMap.at(rx);
+  
+  int idx = -1;
+  if (arrival_counter[no] < snapshots) idx = arrival_counter[no];
+  else idx = snapshots - 1;
+
+  arrival_time[no][ idx ][0] = double(Simulator::Now().GetNanoSeconds());
+  arrival_power[no][ idx ][0] = rxPowerW;
+  ++arrival_counter[no];
+  NS_LOG_UNCOND ("map = " << no << " idx " << idx);
+  
+  vector<bool> fullcheck; 
+  for (auto it = arrival_counter.begin(); it != arrival_counter.end(); ++it){
+    bool isfull = (*it >= snapshots);
+    fullcheck.push_back(isfull);
+  }
+  bool flush = true;
+  for (auto it = fullcheck.begin(); it != fullcheck.end(); ++it){
+    if (!(*it)) flush = false;
+  }
+
+
+  if (flush) {
+    
+    vector<double> powerVec;
+    for (uint i = 0; i < M; ++i){
+      for (uint j = 0; j < snapshots; ++j){
+        for (uint k = 0; k < source_no; ++k){
+          powerVec.push_back(arrival_power[i][j][k]);
+        }
+      }
+    }
+    double minPowerW = *std::min_element(powerVec.begin(), powerVec.end());
+    for (uint i = 0; i < M; ++i){
+      for (uint j = 0; j < snapshots; ++j){
+        for (uint k = 0; k < source_no; ++k){
+          arrival_power[i][j][k] = arrival_power[i][j][k] / minPowerW;
+          NS_LOG_UNCOND ("arrival power = " << arrival_power[i][j][k]);
+        }
+      }
+    }
+
+    ArrayXd analysisArr = music_algo(arrival_time[0][0], arrival_power[0][0], M, snapshots, source_no);    
+
+    
+    // vector<double> vec;
+    // for (auto it = analysisArr.begin(); it != analysisArr.end(); ++it) vec.push_back(*it);
+    // vector<int> localmax = FindLocalMax(vec);
+    // for (auto it = localmax.begin(); it != localmax.end(); ++it){
+    //   NS_LOG_UNCOND("local max = " << *it); 
+    // }
+    NS_LOG_UNCOND ("max = " << std::distance(analysisArr.begin(), std::max_element(analysisArr.begin(), analysisArr.end()))) ;
+    
+    arrival_counter = vector<int> (M, 0);
+  }
 
   NS_LOG_UNCOND (Simulator::Now() << " rx = " << rx << " seq : " << seq << " packet received from src = " << src << " with power = " << rxPowerW );
 }
@@ -221,15 +295,6 @@ StationAssociated (Mac48Address address, uint16_t aid)
                                             aid,
                                             0, spDuration);
 }
-
-// void
-// StationAssociated (Mac48Address address, uint16_t aid)
-// {
-//   NS_LOG_UNCOND ("DMG STA " << staWifiMac->GetAddress () << " associated with DMG AP " << address );
-//   NS_LOG_UNCOND ("Association ID (AID) = " << aid );
-//   staWifiMac->InitiateTxssCbap (apWifiMac->GetAddress ());
-
-// }
 
 /**
  * Callback method to log the number of packets in the Wifi MAC Queue.
@@ -405,7 +470,7 @@ main (int argc, char *argv[])
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   
   for (double i = 0 ; i < staNodes.GetN(); ++i){
-    positionAlloc ->Add (Vector(i * wavelength, 0.0, 0.0));
+    positionAlloc ->Add (ns3::Vector(i * 0.5 * wavelength, 0.0, 0.0));
   }
 
   mobility.SetPositionAllocator (positionAlloc);
@@ -413,13 +478,13 @@ main (int argc, char *argv[])
   mobility.Install (staNodes);
 
   positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (5, 5, 0.0));
+  positionAlloc->Add (ns3::Vector (8.0, 5.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   // mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                            //  "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
-                            // );
+  //                            "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
+  //                           );
   mobility.Install (apNode);
 
 
@@ -562,4 +627,111 @@ main (int argc, char *argv[])
   std::cout << "  Throughput: " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1) * 1e6) << " Mbps" << std::endl;
 
   return 0;
+}
+
+
+
+ArrayXd music_algo(double *time, double *power,int numb_ante, int snap, int sour){
+
+    const std::complex<double> z(0, 1);
+    int M = numb_ante; /* Number of antenna elements */
+    double c = 3e8; 
+    double wavelength = c/5.18e9; /* In units of meters */
+    double frequency = c/wavelength;
+    double seperation = wavelength*0.5;
+    int angular_profile = 180; /* in number of intervals from 0 to 180*/
+
+    ArrayXd angle(angular_profile);
+    for (int i = 0; i<angular_profile; i++){
+        angle(i) = i*M_PI/(angular_profile-1);
+    }
+
+    MatrixXcd sensor_matrix(numb_ante,snap);
+    sensor_matrix = MatrixXcd::Zero(numb_ante,snap);
+    ArrayXcd calibration(snap);
+
+    MatrixXcd sensor_covariance(M,M);
+    sensor_covariance = MatrixXcd::Zero(M,M);
+
+    MatrixXcd E_matrix(M,M);
+     E_matrix = MatrixXcd::Zero(M,M);
+
+    MatrixXd posantenna(2,M);
+    for (int i = 0; i<M; i++){
+        posantenna(0,i) = i*seperation;
+        posantenna(1,i) = 0;
+    }
+    
+    MatrixXd anti_sym(M,M);
+    anti_sym = MatrixXd::Zero(M,M);
+    for(int i = 0; i<M;i++){
+        for(int j = 0; j<M;j++){
+            if (j+i == M-1){
+                anti_sym(i,j) = 1;
+            }
+        }
+    }
+
+    MatrixXcd atheta(M,angular_profile);
+    for (int i = 0; i<M;i++){
+        for (int j = 0; j<angular_profile;j++){
+            Vector2d vec(cos(angle(j)),sin(angle(j)));
+            double phase = -vec.dot(posantenna.col(i))/wavelength*2.0*M_PI;
+            atheta(i,j) = exp(z*phase);
+        }
+    }
+    
+    
+    for (int i  = 0; i<numb_ante; i++){
+        for (int j = 0; j<snap;j++){
+            for (int k = 0; k<sour;k++){
+                double t = *(time+(i*snap + j)*sour+k);
+                double p = *(power+(i*snap + j)*sour+k);
+                sensor_matrix(i,j) = sensor_matrix(i,j) + exp(z*2.0*M_PI*t*frequency*1e-9)*p;
+            }
+        }
+    }
+    for (int j = 0; j<snap; j++){
+        calibration(j) = exp(-z*arg(sensor_matrix(0,j)));
+    }
+    for (int i = 0; i<numb_ante;i++){
+        sensor_matrix.row(i) << sensor_matrix.row(i).array() * calibration.transpose();
+    }
+
+    for (int j = 0; j<snap; j++){
+    sensor_covariance = sensor_covariance + (anti_sym * sensor_matrix.col(j).adjoint().transpose())*(anti_sym * sensor_matrix.col(j).adjoint().transpose()).adjoint()/snap + sensor_matrix.col(j) * (sensor_matrix.col(j)).adjoint()/snap;
+    }
+
+    SelfAdjointEigenSolver<MatrixXcd> eigensolver(sensor_covariance);
+    if (eigensolver.info() != Success) abort();    
+
+    int number_of_sig = M;
+    for (int i = 0; i<M; i++){
+        if(eigensolver.eigenvalues()(i) < eigensolver.eigenvalues().maxCoeff()/100){
+            E_matrix.col(i) = eigensolver.eigenvectors().col(i);
+            number_of_sig--;            
+        }       
+    }
+
+    ArrayXd spatial_metric(angular_profile); 
+
+    for(int i = 0;i<angular_profile;i++){
+        spatial_metric(i) = 1/(atheta.col(i).adjoint()*E_matrix*E_matrix.adjoint()*atheta.col(i))(0,0).real();
+    }
+    spatial_metric = spatial_metric/spatial_metric.maxCoeff();
+
+
+    return spatial_metric; 
+}
+
+vector<int> FindLocalMax(vector<double> &vec){
+  vector<int> ret;
+
+  for (auto it = vec.begin(); it != vec.end(); ++it){
+    if (it == vec.begin() || it+1 == vec.end()) continue;
+    if (*(it -1) < *it && *(it + 1) < *it) 
+      ret.push_back(std::distance(vec.begin(), it));
+  }
+
+  return ret;
 }

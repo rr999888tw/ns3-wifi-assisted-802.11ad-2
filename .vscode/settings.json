@@ -3,7 +3,10 @@
         "iostream": "cpp",
         "complex": "cpp",
         "dense": "cpp",
-        "eigenvalues": "cpp"
+        "eigenvalues": "cpp",
+        "chrono": "cpp",
+        "random": "cpp",
+        "limits": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }
