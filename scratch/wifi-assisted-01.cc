@@ -21,6 +21,8 @@
 #include <assert.h>
 #include "Eigen/Dense"
 #include <stdio.h>
+#include <iomanip>
+
 /**
  * Simulation Objective:
  * This script is used to evaluate the throughput achieved using a simple allocation of a static
@@ -145,6 +147,8 @@ ActiveTxSectorIDChanged (Ptr<DmgWifiMac> wifiMac, SectorID oldSectorID, SectorID
   } else {
     assert(false);
   }
+  
+  return;
 }
 
 void
@@ -168,29 +172,9 @@ SetSectors()
 void
 CourseChange (std::string context, Ptr<const MobilityModel> model)
 {
-  // ns3::Vector position = model->GetPosition ();
-  // NS_LOG_UNCOND (context <<
-  //   " x = " << position.x << ", y = " << position.y);
-
-  // double xdel = position.x - 0.2;
-  // double ydel = position.y;
-  // Complex a = Complex(xdel, ydel);
-  // double ang = arg(a) * 180 / M_PI;
-  // if (ang < 0)
-  //   ang += 360;
-    
-  // double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
-
-  // ::staSectorId = int(ceil(ang/45.0));
-  // ::apSectorId = int(ceil(reang/45.0));
-  
-  // NS_LOG_UNCOND ("xdel = " << xdel );
-  // NS_LOG_UNCOND ("ydel = " << ydel );
-  // NS_LOG_UNCOND ("angle = " << ang  << " reang = " << reang);
-  // NS_LOG_UNCOND ("staSectorID = " << int(::staSectorId));
-  // NS_LOG_UNCOND ("apSectorID = " << int(::apSectorId));
-  
-  // Simulator::ScheduleNow(&SetSectors);
+  ns3::Vector position = model->GetPosition ();
+  NS_LOG_UNCOND (context <<  " x = " << position.x << ", y = " << position.y);
+  return;
 }
 
 
@@ -224,7 +208,7 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
   if (arrival_counter[no] < snapshots) idx = arrival_counter[no];
   else idx = snapshots - 1;
 
-  arrival_time[no][ idx ][0] = double(Simulator::Now().GetNanoSeconds());
+  arrival_time[no][ idx ][0] = double(Simulator::Now().GetPicoSeconds()) / 1000.0;
   arrival_power[no][ idx ][0] = rxPowerW;
   ++arrival_counter[no];
   NS_LOG_UNCOND ("map = " << no << " idx " << idx);
@@ -241,41 +225,22 @@ MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) {
 
 
   if (flush) {
-    
-    vector<double> powerVec;
-    for (uint i = 0; i < M; ++i){
-      for (uint j = 0; j < snapshots; ++j){
-        for (uint k = 0; k < source_no; ++k){
-          powerVec.push_back(arrival_power[i][j][k]);
-        }
-      }
-    }
-    double minPowerW = *std::min_element(powerVec.begin(), powerVec.end());
-    for (uint i = 0; i < M; ++i){
-      for (uint j = 0; j < snapshots; ++j){
-        for (uint k = 0; k < source_no; ++k){
-          arrival_power[i][j][k] = arrival_power[i][j][k] / minPowerW;
-
-          NS_LOG_UNCOND ("arrival power = " << arrival_power[i][j][k]);
-        }
-      }
-    }
 
     ArrayXd analysisArr = music_algo(arrival_time[0][0], arrival_power[0][0], M, snapshots, source_no);    
+    int maxDeg = std::distance(analysisArr.begin(), std::max_element(analysisArr.begin(), analysisArr.end()));
+    NS_LOG_UNCOND ("max = " << maxDeg) ;
 
-    // vector<double> vec;
-    // for (auto it = analysisArr.begin(); it != analysisArr.end(); ++it) vec.push_back(*it);
-    // vector<int> localmax = FindLocalMax(vec);
-    // for (auto it = localmax.begin(); it != localmax.end(); ++it){
-    //   NS_LOG_UNCOND("local max = " << *it); 
-    // }
-
-    NS_LOG_UNCOND ("max = " << std::distance(analysisArr.begin(), std::max_element(analysisArr.begin(), analysisArr.end()))) ;
+    staSectorId = maxDeg / 45 + 1 ;
+    apSectorId = staSectorId + 4 ;
+    NS_LOG_UNCOND ("staSectorId = " << int(staSectorId) << " apSectorId = " << int(apSectorId));
+    Simulator::ScheduleNow(&SetSectors);
+    
 
     arrival_counter = vector<int> (M, 0);
   }
-
-  NS_LOG_UNCOND (Simulator::Now() << " rx = " << rx << " seq : " << seq << " packet received from src = " << src << " with power = " << rxPowerW );
+  double now = double (Simulator::Now().GetPicoSeconds());
+  NS_LOG_UNCOND ( setprecision(20) << now << " rx = " << rx << " seq : " << seq << " packet received from src = " << src << " with power = " << rxPowerW );
+  NS_LOG_UNCOND ( setprecision(3) );
 }
 
 
@@ -308,12 +273,12 @@ StationAssociated (Mac48Address address, uint16_t aid)
 /**
  * Callback method to log the number of packets in the Wifi MAC Queue.
  */
-void
-QueueOccupancyChange (Ptr<OutputStreamWrapper> file, uint32_t oldValue, uint32_t newValue)
-{
-  std::ostream *output = file->GetStream ();
-  *output << Simulator::Now ().GetNanoSeconds () << "," << newValue << endl;
-}
+// void
+// QueueOccupancyChange (Ptr<OutputStreamWrapper> file, uint32_t oldValue, uint32_t newValue)
+// {
+//   std::ostream *output = file->GetStream ();
+//   *output << Simulator::Now ().GetPicoSeconds () << "," << newValue << endl;
+// }
 
 int
 main (int argc, char *argv[])
@@ -327,7 +292,9 @@ main (int argc, char *argv[])
   bool verbose = false;                         /* Print Logging Information. */
   double simulationTime = 10;                   /* Simulation time in seconds. */
   bool pcapTracing = false;                     /* PCAP Tracing is enabled or not. */
-
+  
+  
+  Time::SetResolution(Time::Unit(Time::PS));
   /* Command line argument parser setup. */
   CommandLine cmd;
   cmd.AddValue ("packetSize", "Payload size in bytes", packetSize);
@@ -487,13 +454,13 @@ main (int argc, char *argv[])
   mobility.Install (staNodes);
 
   positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (ns3::Vector (4.0, 4.0, 0.0));
+  positionAlloc->Add (ns3::Vector (-2.0, 2.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  // mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-  //                            "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
-  //                           );
+  // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                            );
   mobility.Install (apNode);
 
 
@@ -526,6 +493,11 @@ main (int argc, char *argv[])
 
   /* We do not want any ARP packets */
   PopulateArpCache ();
+  // ArpCache::SetAliveTimeout()
+  // ArpCache::Entry *entry = 
+              //   ArpCache::Entry * entry = arp->Add(ipAddr);
+              // entry->MarkWaitReply(0);
+              // entry->MarkAlive(addr);
 
   /* Install Simple UDP Server on the STA */
   PacketSinkHelper sinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9999));

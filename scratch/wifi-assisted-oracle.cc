@@ -76,6 +76,11 @@ uint8_t slsCounter = 0;
 int64_t slsMilliSec = 0;
 Time sweepTime = Time(0);
 
+
+const double c = 3e8;
+const double frequency = 5.18e9;
+const double wavelength = c/frequency;
+
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
 {
@@ -296,13 +301,18 @@ main (int argc, char *argv[])
 
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
-  wifiNodes.Create (3);
+  wifiNodes.Create (5);
   Ptr<Node> apNode = wifiNodes.Get (0);
   Ptr<Node> staNode = wifiNodes.Get (1);
   Ptr<Node> staNode2 = wifiNodes.Get (2);
+  Ptr<Node> staNode3 = wifiNodes.Get (3);
+  Ptr<Node> staNode4 = wifiNodes.Get (4);
+
   NodeContainer staNodes;
   staNodes.Add(staNode);
   staNodes.Add(staNode2);
+  staNodes.Add(staNode3);
+  staNodes.Add(staNode4);
 
   /* Add a DMG upper mac */
   DmgWifiMacHelper wifiMac = DmgWifiMacHelper::Default ();
@@ -377,25 +387,25 @@ main (int argc, char *argv[])
 
 
 
-
   /* Setting mobility model */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-//   positionAlloc->Add (Vector (5.0, 5.0, 0.0));   /* PCP/AP */
-  positionAlloc->Add (Vector (0.2, 0.0, 0.0));   /* DMG STA */
-  positionAlloc->Add (Vector (-0.2, 0.0, 0.0));   /* DMG STA 2*/
+  
+  for (double i = 0 ; i < staNodes.GetN(); ++i){
+    positionAlloc ->Add (ns3::Vector(i * 0.5 * wavelength, 0.0, 0.0));
+  }
 
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (staNodes);
 
   positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.21, 0.01, 0.0));
+  positionAlloc->Add (ns3::Vector (-2.0, 2.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
-//   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, -5, 5))
+                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
                             );
   mobility.Install (apNode);
 

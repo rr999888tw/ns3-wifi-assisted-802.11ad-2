@@ -15,7 +15,7 @@ void
 PopulateArpCache (void)
 {
   Ptr<ArpCache> arp = CreateObject<ArpCache> ();
-  arp->SetAliveTimeout (Seconds (3600 * 24 * 365));
+  arp->SetAliveTimeout (Seconds (3600 * 24));
 
   for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i)
     {
