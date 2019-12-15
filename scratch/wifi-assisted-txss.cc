@@ -100,6 +100,7 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, Mac48Address address, ChannelAccessPeriod
 //   ++::slsCounter;
 //   int64_t  millisec = (staWifiMac-> CalculateSectorSweepDuration(8)).GetMilliSeconds();
 //   ::slsMilliSec += 
+  
   NS_LOG_UNCOND ("slscompleted" );
 }
 
@@ -304,14 +305,14 @@ main (int argc, char *argv[])
   wifiNodes.Create (5);
   Ptr<Node> apNode = wifiNodes.Get (0);
   Ptr<Node> staNode = wifiNodes.Get (1);
-  Ptr<Node> staNode2 = wifiNodes.Get (2);
-  Ptr<Node> staNode3 = wifiNodes.Get (3);
+  // Ptr<Node> staNode2 = wifiNodes.Get (2);
+  // Ptr<Node> staNode3 = wifiNodes.Get (3);
   // Ptr<Node> staNode4 = wifiNodes.Get (4);
 
   NodeContainer staNodes;
   staNodes.Add(staNode);
-  staNodes.Add(staNode2);
-  staNodes.Add(staNode3);
+  // staNodes.Add(staNode2);
+  // staNodes.Add(staNode3);
   // staNodes.Add(staNode4);
 
   /* Add a DMG upper mac */
@@ -352,36 +353,34 @@ main (int argc, char *argv[])
 
 
 
-  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
-  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
-  phy.SetChannel (channel.Create ());
+  // YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  // YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+  // phy.SetChannel (channel.Create ());
 
-  WifiHelper mywifi;
-  mywifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+  // WifiHelper mywifi;
+  // mywifi.SetRemoteStationManager ("ns3::AarfWifiManager");
 
-  WifiMacHelper mac;
-  Ssid ssid2 = Ssid ("ns-3-ssid");
-  mac.SetType ("ns3::StaWifiMac",
-               "Ssid", SsidValue (ssid2),
-               "ActiveProbing", BooleanValue (false));
+  // WifiMacHelper mac;
+  // Ssid ssid2 = Ssid ("ns-3-ssid");
+  // mac.SetType ("ns3::StaWifiMac",
+  //              "Ssid", SsidValue (ssid2),
+  //              "ActiveProbing", BooleanValue (false));
 
-  NetDeviceContainer staWifiDev;
-  staWifiDev = mywifi.Install (phy, mac, staNodes);
+  // NetDeviceContainer staWifiDev;
+  // staWifiDev = mywifi.Install (phy, mac, staNodes);
 
-  for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
-    Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
-    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
-  }
+  // for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
+  //   Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
+  //   wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
+  // }
 
-  mac.SetType ("ns3::ApWifiMac",
-               "Ssid", SsidValue (ssid2),
-               "BeaconInterval", TimeValue (beaconInterval)
-               );
+  // mac.SetType ("ns3::ApWifiMac",
+  //              "Ssid", SsidValue (ssid2),
+  //              "BeaconInterval", TimeValue (beaconInterval)
+  //              );
 
-
-
-  NetDeviceContainer apWifiDev;
-  apWifiDev = mywifi.Install (phy, mac, apNode);
+  // NetDeviceContainer apWifiDev;
+  // apWifiDev = mywifi.Install (phy, mac, apNode);
   
 
 
@@ -405,9 +404,11 @@ main (int argc, char *argv[])
   positionAlloc->Add (ns3::Vector (-2.0, 2.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
+
   // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                            //  "Speed", StringValue ("ns3::UniformRandomVariable[Min=1.0|Max=5.0]")
                             );
   mobility.Install (apNode);
 

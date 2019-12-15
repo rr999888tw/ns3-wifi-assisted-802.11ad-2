@@ -88,6 +88,7 @@ SectorID staSectorId = 1;
 uint8_t slsCounter = 0;
 int64_t slsMilliSec = 0;
 Time sweepTime = Time(0);
+Time accuSweepTime = Time(0);
 
 
 
@@ -109,8 +110,11 @@ vector<int> FindLocalMax(vector<double> &vec);
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
 {
-  sweepTime += apWifiMac->CalculateBeamformingTrainingDuration(8, 8);
-  NS_LOG_UNCOND ("BIStarted, sweepTime = " << sweepTime);
+  Time sw = apWifiMac->CalculateBeamformingTrainingDuration(8, 8);
+  sweepTime += sw;
+  accuSweepTime += sw;
+  NS_LOG_UNCOND ("BIStarted, sweepTime = " << sweepTime.GetSeconds());
+  NS_LOG_UNCOND ("BIStarted, accuSweepTime = " << accuSweepTime.GetSeconds());
 }
 
 void
@@ -460,6 +464,7 @@ main (int argc, char *argv[])
   // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                            //  "Speed", StringValue ("ns3::UniformRandomVariable[Min=1.0|Max=5.0]")
                             );
   mobility.Install (apNode);
 
@@ -592,10 +597,11 @@ main (int argc, char *argv[])
       std::cout << "Flow " << i->first << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")" << std::endl;;
       std::cout << "  Tx Packets: " << i->second.txPackets << std::endl;
       std::cout << "  Tx Bytes:   " << i->second.txBytes << std::endl;
-      std::cout << "  TxOffered:  " << i->second.txBytes * 8.0 / ((simulationTime - 1) * 1e6)  << " Mbps" << std::endl;;
+      std::cout << "  TxOffered:  " << i->second.txBytes * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6)  << " Mbps" << std::endl;;
       std::cout << "  Rx Packets: " << i->second.rxPackets << std::endl;;
       std::cout << "  Rx Bytes:   " << i->second.rxBytes << std::endl;
       std::cout << "  Throughput: " << i->second.rxBytes * 8.0 / ((simulationTime - 1) * 1e6)  << " Mbps" << std::endl;;
+      std::cout << "  Throughput (substract beamforming time): " << i->second.rxBytes * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6)  << " Mbps" << std::endl;;
     }
 
   /* Print Application Layer Results Summary */
@@ -605,6 +611,7 @@ main (int argc, char *argv[])
   std::cout << "  Rx Packets: " << packetSink->GetTotalReceivedPackets () << std::endl;
   std::cout << "  Rx Bytes:   " << packetSink->GetTotalRx () << std::endl;
   std::cout << "  Throughput: " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1) * 1e6) << " Mbps" << std::endl;
+  std::cout << "  Throughput (substract beamforming time): " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6) << " Mbps" << std::endl;
 
   return 0;
 }
