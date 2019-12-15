@@ -75,21 +75,17 @@ SectorID staSectorId = 1;
 uint8_t slsCounter = 0;
 int64_t slsMilliSec = 0;
 Time sweepTime = Time(0);
-Time accuSweepTime = Time(0);
-
 
 const double c = 3e8;
 const double frequency = 5.18e9;
 const double wavelength = c/frequency;
 
+
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
 {
-  Time sw = apWifiMac->CalculateBeamformingTrainingDuration(8, 8);
-  sweepTime += sw;
-  accuSweepTime += sw;
-  NS_LOG_UNCOND ("BIStarted, sweepTime = " << sweepTime.GetSeconds());
-  NS_LOG_UNCOND ("BIStarted, accuSweepTime = " << accuSweepTime.GetSeconds());
+  // sweepTime += apWifiMac->CalculateBeamformingTrainingDuration(8, 8);
+  // NS_LOG_UNCOND ("BIStarted, sweepTime = " << sweepTime);
 }
 
 void
@@ -110,43 +106,43 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, Mac48Address address, ChannelAccessPeriod
 void
 ActiveTxSectorIDChanged (Ptr<DmgWifiMac> wifiMac, SectorID oldSectorID, SectorID newSectorID)
 {
-  if (wifiMac == apWifiMac) {
+  // if (wifiMac == apWifiMac) {
     
-    NS_LOG_UNCOND ("DMG AP: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID));
+  //   NS_LOG_UNCOND ("DMG AP: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID));
     
-    if (newSectorID != ::apSectorId)
-      wifiMac->GetCodebook()-> SetActiveTxSectorID(apSectorId);
-    return;
+  //   if (newSectorID != ::apSectorId)
+  //     wifiMac->GetCodebook()-> SetActiveTxSectorID(apSectorId);
+  //   return;
 
-  } else if (wifiMac == staWifiMac) {
+  // } else if (wifiMac == staWifiMac) {
 
-    NS_LOG_UNCOND ("DMG STA: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID)  );
+  //   NS_LOG_UNCOND ("DMG STA: " << wifiMac->GetAddress () << " , SectorID=" << uint16_t (newSectorID)  );
     
-    if (newSectorID != ::staSectorId)
-      wifiMac->GetCodebook()-> SetActiveTxSectorID(staSectorId);
-    return;
+  //   if (newSectorID != ::staSectorId)
+  //     wifiMac->GetCodebook()-> SetActiveTxSectorID(staSectorId);
+  //   return;
 
-  } else {
-    assert(false);
-  }
+  // } else {
+  //   assert(false);
+  // }
 }
 
 void
 SetSectors()
 {
-  Ptr<Codebook> apCodebook = StaticCast<DmgApWifiMac> (apWifiNetDevice->GetMac ())->GetCodebook();
-  Ptr<Codebook> staCodebook = StaticCast<DmgStaWifiMac> (staWifiNetDevice->GetMac ())->GetCodebook();
-  NS_LOG_UNCOND ("set sectors ");
+  // Ptr<Codebook> apCodebook = StaticCast<DmgApWifiMac> (apWifiNetDevice->GetMac ())->GetCodebook();
+  // Ptr<Codebook> staCodebook = StaticCast<DmgStaWifiMac> (staWifiNetDevice->GetMac ())->GetCodebook();
+  // NS_LOG_UNCOND ("set sectors ");
   
-  if (apCodebook->GetActiveTxSectorID() != ::apSectorId)
-    apCodebook ->SetActiveTxSectorID(::apSectorId);
+  // if (apCodebook->GetActiveTxSectorID() != ::apSectorId)
+  //   apCodebook ->SetActiveTxSectorID(::apSectorId);
 
-  if (staCodebook->GetActiveTxSectorID() != ::staSectorId)
-    staCodebook ->SetActiveTxSectorID(::staSectorId);
+  // if (staCodebook->GetActiveTxSectorID() != ::staSectorId)
+  //   staCodebook ->SetActiveTxSectorID(::staSectorId);
 
-  Simulator::Schedule (MilliSeconds(5), &SetSectors);
+  // Simulator::Schedule (MilliSeconds(1), &SetSectors);
   
-  return ;
+  // return ;
 }
 
 void
@@ -310,13 +306,13 @@ main (int argc, char *argv[])
   Ptr<Node> staNode = wifiNodes.Get (1);
   Ptr<Node> staNode2 = wifiNodes.Get (2);
   Ptr<Node> staNode3 = wifiNodes.Get (3);
-  Ptr<Node> staNode4 = wifiNodes.Get (4);
+  // Ptr<Node> staNode4 = wifiNodes.Get (4);
 
   NodeContainer staNodes;
   staNodes.Add(staNode);
   staNodes.Add(staNode2);
   staNodes.Add(staNode3);
-  staNodes.Add(staNode4);
+  // staNodes.Add(staNode4);
 
   /* Add a DMG upper mac */
   DmgWifiMacHelper wifiMac = DmgWifiMacHelper::Default ();
@@ -359,7 +355,7 @@ main (int argc, char *argv[])
   YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
   YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
   phy.SetChannel (channel.Create ());
-  
+
   WifiHelper mywifi;
   mywifi.SetRemoteStationManager ("ns3::AarfWifiManager");
 
@@ -391,6 +387,8 @@ main (int argc, char *argv[])
 
 
 
+
+
   /* Setting mobility model */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
@@ -409,10 +407,10 @@ main (int argc, char *argv[])
 
   // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5)),
+                             "Speed", StringValue ("ns3::UniformRandomVariable[Min=1.0|Max=5.0]")
                             );
   mobility.Install (apNode);
-
 
 
 
@@ -517,9 +515,10 @@ main (int argc, char *argv[])
 
 
 
-//   for (double i = 1.2 ; i < simulationTime; i += 0.1){
-//     Simulator::Schedule (Seconds (i), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
-//   }
+  for (double i = 1.2 ; i < simulationTime; i += 0.1){
+    // Simulator::Schedule (Seconds (i), &DmgWifiMac::InitiateTxssCbap, staWifiMac, apWifiMac->GetAddress ());
+    // Simulator::Schedule (Seconds (i), &DmgWifiMac::InitiateTxssCbap, apWifiMac, staWifiMac->GetAddress ());
+  }
 
 
 
@@ -542,7 +541,6 @@ main (int argc, char *argv[])
       std::cout << "  Rx Packets: " << i->second.rxPackets << std::endl;;
       std::cout << "  Rx Bytes:   " << i->second.rxBytes << std::endl;
       std::cout << "  Throughput: " << i->second.rxBytes * 8.0 / ((simulationTime - 1) * 1e6)  << " Mbps" << std::endl;;
-      std::cout << "  Throughput (substract beamforming time): " << i->second.rxBytes * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6)  << " Mbps" << std::endl;;
     }
 
   /* Print Application Layer Results Summary */
@@ -552,7 +550,6 @@ main (int argc, char *argv[])
   std::cout << "  Rx Packets: " << packetSink->GetTotalReceivedPackets () << std::endl;
   std::cout << "  Rx Bytes:   " << packetSink->GetTotalRx () << std::endl;
   std::cout << "  Throughput: " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1) * 1e6) << " Mbps" << std::endl;
-  std::cout << "  Throughput (substract beamforming time): " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6) << " Mbps" << std::endl;
 
   return 0;
 }

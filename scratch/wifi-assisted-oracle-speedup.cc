@@ -409,7 +409,8 @@ main (int argc, char *argv[])
 
   // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5)),
+                             "Speed", StringValue ("ns3::UniformRandomVariable[Min=1.0|Max=5.0]")
                             );
   mobility.Install (apNode);
 

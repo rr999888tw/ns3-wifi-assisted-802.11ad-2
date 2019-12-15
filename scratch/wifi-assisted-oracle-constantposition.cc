@@ -144,7 +144,7 @@ SetSectors()
   if (staCodebook->GetActiveTxSectorID() != ::staSectorId)
     staCodebook ->SetActiveTxSectorID(::staSectorId);
 
-  Simulator::Schedule (MilliSeconds(5), &SetSectors);
+  // Simulator::Schedule (MilliSeconds(1), &SetSectors);
   
   return ;
 }
@@ -407,10 +407,10 @@ main (int argc, char *argv[])
   positionAlloc->Add (ns3::Vector (-2.0, 2.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
-  // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
-                            );
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                            //  "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                            // );
   mobility.Install (apNode);
 
 

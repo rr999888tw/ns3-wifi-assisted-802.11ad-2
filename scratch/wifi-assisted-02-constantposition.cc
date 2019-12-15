@@ -19,6 +19,9 @@
 #include <math.h>       /* atan */
 #include <complex.h>       /* atan */
 #include <assert.h>
+#include "Eigen/Dense"
+#include <stdio.h>
+#include <iomanip>
 
 /**
  * Simulation Objective:
@@ -54,6 +57,7 @@
 
 NS_LOG_COMPONENT_DEFINE ("EvaluateSimpleServicePeriod");
 
+using namespace Eigen;
 using namespace ns3;
 using namespace std;
 
@@ -67,9 +71,18 @@ Ptr<DmgApWifiMac> apWifiMac;
 Ptr<DmgStaWifiMac> staWifiMac;
 NetDeviceContainer staDevices;
 
+Ptr<WifiNetDevice> myApWifiNetDevice;
+Ptr<ApWifiMac> myApWifiMac;
+NetDeviceContainer myStaDevices;
+
 /*** Service Periods ***/
-uint16_t spDuration = 3200;               /* The duration of the allocated service period in MicroSeconds */
 const Time beaconInterval = MilliSeconds(1);
+const double c = 3e8;
+const double frequency = 5.18e9;
+const double wavelength = c/frequency;
+
+
+uint16_t spDuration = 3200;               /* The duration of the allocated service period in MicroSeconds */
 SectorID apSectorId = 1;
 SectorID staSectorId = 1;
 uint8_t slsCounter = 0;
@@ -78,9 +91,21 @@ Time sweepTime = Time(0);
 Time accuSweepTime = Time(0);
 
 
-const double c = 3e8;
-const double frequency = 5.18e9;
-const double wavelength = c/frequency;
+
+const int M = 4;
+const int snapshots = 100;
+const int source_no = 1;
+
+double arrival_time[M][snapshots][source_no];
+double arrival_power[M][snapshots][source_no];
+vector<int> arrival_counter (M, 0);
+
+
+map<Mac48Address, uint> addrMap; 
+
+ArrayXd music_algo(double* time, double* power,int numb_ante, int snap, int sour);
+vector<int> FindLocalMax(vector<double> &vec);
+
 
 void
 BIStarted (Ptr<DmgApWifiMac> wifiMac, Mac48Address address)
@@ -101,9 +126,6 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, Mac48Address address, ChannelAccessPeriod
   std::cout << "The best antenna configuration is SectorID=" << uint32_t (sectorId)
                 << ", AntennaID=" << uint32_t (antennaId) << std::endl;
 
-//   ++::slsCounter;
-//   int64_t  millisec = (staWifiMac-> CalculateSectorSweepDuration(8)).GetMilliSeconds();
-//   ::slsMilliSec += 
   NS_LOG_UNCOND ("slscompleted" );
 }
 
@@ -129,6 +151,8 @@ ActiveTxSectorIDChanged (Ptr<DmgWifiMac> wifiMac, SectorID oldSectorID, SectorID
   } else {
     assert(false);
   }
+  
+  return;
 }
 
 void
@@ -144,7 +168,7 @@ SetSectors()
   if (staCodebook->GetActiveTxSectorID() != ::staSectorId)
     staCodebook ->SetActiveTxSectorID(::staSectorId);
 
-  Simulator::Schedule (MilliSeconds(5), &SetSectors);
+  Simulator::Schedule (MilliSeconds(1), &SetSectors);
   
   return ;
 }
@@ -152,41 +176,75 @@ SetSectors()
 void
 CourseChange (std::string context, Ptr<const MobilityModel> model)
 {
-  Vector position = model->GetPosition ();
-  NS_LOG_UNCOND (context <<
-    " x = " << position.x << ", y = " << position.y);
-
-  double xdel = position.x - 0.2;
-  double ydel = position.y;
-  Complex a = Complex(xdel, ydel);
-  double ang = arg(a) * 180 / M_PI;
-  if (ang < 0)
-    ang += 360;
-    
-  double reang = (ang + 180)>360? (ang + 180 - 360): (ang + 180);
-
-  ::staSectorId = int(ceil(ang/45));
-  ::apSectorId = int(ceil(reang/45));
-  
-  NS_LOG_UNCOND ("xdel = " << xdel );
-  NS_LOG_UNCOND ("ydel = " << ydel );
-  NS_LOG_UNCOND ("angle = " << ang  << " reang = " << reang);
-  NS_LOG_UNCOND ("staSectorID = " << int(::staSectorId));
-  NS_LOG_UNCOND ("apSectorID = " << int(::apSectorId));
-  
-  Simulator::ScheduleNow(&SetSectors);
+  ns3::Vector position = model->GetPosition ();
+  NS_LOG_UNCOND (context <<  " x = " << position.x << ", y = " << position.y);
+  return;
 }
 
 
 void
-MyRxBegin (Ptr<const Packet> p, double rxPowerW) { 
+MyRxBegin (Ptr<WifiNetDevice> wifinet, Ptr<const Packet> p, double rxPowerW) { 
 
-//   WifiMacHeader head;
-//   p->PeekHeader (head);
-//   Mac48Address dest = head.GetAddr2 ();
-//   uint16_t seq = head.GetSequenceNumber();
+  WifiMacHeader head;
+  p->PeekHeader (head);
+  Mac48Address dst = head.GetAddr1 ();
+  Mac48Address src = head.GetAddr2 ();
+  Mac48Address broadcast = Mac48Address("ff:ff:ff:ff:ff:ff");
+  Mac48Address rx = wifinet->GetMac() ->GetAddress();
+  uint16_t seq = head.GetSequenceNumber();
+  bool skipCond = !(src == myApWifiMac->GetAddress() && dst == broadcast );
+  if (skipCond) return;
 
-//   NS_LOG_UNCOND (Simulator::Now() << " seq : " << seq << " packet received from " << dest << " with power = " << rxPowerW );
+  if (addrMap.empty()) {
+    for (uint i = 0; i < myStaDevices.GetN(); ++i){
+      Mac48Address tmpaddr = StaticCast<WifiNetDevice>(myStaDevices.Get(i)) ->GetMac() ->GetAddress();
+      addrMap.insert(pair<Mac48Address, uint> (tmpaddr, i));
+    }    
+  } else {
+    for (auto it = addrMap.begin(); it != addrMap.end(); ++it){
+      NS_LOG_UNCOND (" first = " << it ->first << " second = " << it->second);
+    }
+  }
+
+  uint no = addrMap.at(rx);
+  
+  int idx = -1;
+  if (arrival_counter[no] < snapshots) idx = arrival_counter[no];
+  else idx = snapshots - 1;
+
+  arrival_time[no][ idx ][0] = double(Simulator::Now().GetPicoSeconds()) / 1000.0;
+  arrival_power[no][ idx ][0] = rxPowerW;
+  ++arrival_counter[no];
+  NS_LOG_UNCOND ("map = " << no << " idx " << idx);
+  
+  vector<bool> fullcheck; 
+  for (auto it = arrival_counter.begin(); it != arrival_counter.end(); ++it){
+    bool isfull = (*it >= snapshots);
+    fullcheck.push_back(isfull);
+  }
+  bool flush = true;
+  for (auto it = fullcheck.begin(); it != fullcheck.end(); ++it){
+    if (!(*it)) flush = false;
+  }
+
+
+  if (flush) {
+
+    ArrayXd analysisArr = music_algo(arrival_time[0][0], arrival_power[0][0], M, snapshots, source_no);    
+    int maxDeg = std::distance(analysisArr.begin(), std::max_element(analysisArr.begin(), analysisArr.end()));
+    NS_LOG_UNCOND ("max = " << maxDeg) ;
+
+    staSectorId = maxDeg / 45 + 1 ;
+    apSectorId = staSectorId + 4 ;
+    NS_LOG_UNCOND ("staSectorId = " << int(staSectorId) << " apSectorId = " << int(apSectorId));
+    Simulator::ScheduleNow(&SetSectors);
+    
+
+    arrival_counter = vector<int> (M, 0);
+  }
+  double now = double (Simulator::Now().GetPicoSeconds());
+  NS_LOG_UNCOND ( setprecision(20) << now << " rx = " << rx << " seq : " << seq << " packet received from src = " << src << " with power = " << rxPowerW );
+  NS_LOG_UNCOND ( setprecision(3) );
 }
 
 
@@ -216,24 +274,15 @@ StationAssociated (Mac48Address address, uint16_t aid)
                                             0, spDuration);
 }
 
-// void
-// StationAssociated (Mac48Address address, uint16_t aid)
-// {
-//   NS_LOG_UNCOND ("DMG STA " << staWifiMac->GetAddress () << " associated with DMG AP " << address );
-//   NS_LOG_UNCOND ("Association ID (AID) = " << aid );
-//   staWifiMac->InitiateTxssCbap (apWifiMac->GetAddress ());
-
-// }
-
 /**
  * Callback method to log the number of packets in the Wifi MAC Queue.
  */
-void
-QueueOccupancyChange (Ptr<OutputStreamWrapper> file, uint32_t oldValue, uint32_t newValue)
-{
-  std::ostream *output = file->GetStream ();
-  *output << Simulator::Now ().GetNanoSeconds () << "," << newValue << endl;
-}
+// void
+// QueueOccupancyChange (Ptr<OutputStreamWrapper> file, uint32_t oldValue, uint32_t newValue)
+// {
+//   std::ostream *output = file->GetStream ();
+//   *output << Simulator::Now ().GetPicoSeconds () << "," << newValue << endl;
+// }
 
 int
 main (int argc, char *argv[])
@@ -247,7 +296,9 @@ main (int argc, char *argv[])
   bool verbose = false;                         /* Print Logging Information. */
   double simulationTime = 10;                   /* Simulation time in seconds. */
   bool pcapTracing = false;                     /* PCAP Tracing is enabled or not. */
-
+  
+  
+  Time::SetResolution(Time::Unit(Time::PS));
   /* Command line argument parser setup. */
   CommandLine cmd;
   cmd.AddValue ("packetSize", "Payload size in bytes", packetSize);
@@ -369,12 +420,12 @@ main (int argc, char *argv[])
                "Ssid", SsidValue (ssid2),
                "ActiveProbing", BooleanValue (false));
 
-  NetDeviceContainer staWifiDev;
-  staWifiDev = mywifi.Install (phy, mac, staNodes);
+  
+  myStaDevices = mywifi.Install (phy, mac, staNodes);
 
-  for (NetDeviceContainer::Iterator it = staWifiDev.Begin(); it != staWifiDev.End(); ++it){
+  for (NetDeviceContainer::Iterator it = myStaDevices.Begin(); it != myStaDevices.End(); ++it){
     Ptr<WifiNetDevice> wifinetdev = StaticCast<WifiNetDevice> (*it);
-    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeCallback (&MyRxBegin));
+    wifinetdev ->GetPhy() ->TraceConnectWithoutContext ("PhyRxBegin2", MakeBoundCallback (&MyRxBegin, wifinetdev));
   }
 
   mac.SetType ("ns3::ApWifiMac",
@@ -382,11 +433,14 @@ main (int argc, char *argv[])
                "BeaconInterval", TimeValue (beaconInterval)
                );
 
-
-
   NetDeviceContainer apWifiDev;
   apWifiDev = mywifi.Install (phy, mac, apNode);
-  
+
+
+  myApWifiNetDevice = StaticCast<WifiNetDevice> (apWifiDev.Get (0));
+  myApWifiMac = StaticCast<ApWifiMac> (myApWifiNetDevice->GetMac ());
+
+
 
 
 
@@ -407,10 +461,11 @@ main (int argc, char *argv[])
   positionAlloc->Add (ns3::Vector (-2.0, 2.0, 0.0));
   mobility.SetPositionAllocator (positionAlloc);
 
-  // mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
-                            );
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                            //  "Bounds", RectangleValue (Rectangle (-5, 5, 0.5, 5))
+                            //  "Speed", StringValue ("ns3::UniformRandomVariable[Min=1.0|Max=5.0]")
+                            // );
   mobility.Install (apNode);
 
 
@@ -422,7 +477,6 @@ main (int argc, char *argv[])
     "/$ns3::MobilityModel/CourseChange";
   
   Config::Connect (oss.str (), MakeCallback (&CourseChange));
-
 
 
 
@@ -444,6 +498,11 @@ main (int argc, char *argv[])
 
   /* We do not want any ARP packets */
   PopulateArpCache ();
+  // ArpCache::SetAliveTimeout()
+  // ArpCache::Entry *entry = 
+              //   ArpCache::Entry * entry = arp->Add(ipAddr);
+              // entry->MarkWaitReply(0);
+              // entry->MarkAlive(addr);
 
   /* Install Simple UDP Server on the STA */
   PacketSinkHelper sinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9999));
@@ -479,12 +538,12 @@ main (int argc, char *argv[])
   Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/MaxPackets", UintegerValue (queueSize));
 
   /* Connect Wifi MAC Queue Occupancy */
-  AsciiTraceHelper asciiTraceHelper;
-  Ptr<OutputStreamWrapper> queueOccupanyStream;
+  // AsciiTraceHelper asciiTraceHelper;
+  // Ptr<OutputStreamWrapper> queueOccupanyStream;
   /* Trace DMG PCP/AP MAC Queue Changes */
-  queueOccupanyStream = asciiTraceHelper.CreateFileStream ("Traces/AccessPointMacQueueOccupany.txt");
-  Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/OccupancyChanged",
-                                 MakeBoundCallback (&QueueOccupancyChange, queueOccupanyStream));
+  // queueOccupanyStream = asciiTraceHelper.CreateFileStream ("Traces/AccessPointMacQueueOccupany.txt");
+  // Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/$ns3::WifiNetDevice/Mac/$ns3::RegularWifiMac/BE_EdcaTxopN/Queue/OccupancyChanged",
+  //                                MakeBoundCallback (&QueueOccupancyChange, queueOccupanyStream));
 
   /* Enable Traces */
   if (pcapTracing)
@@ -538,7 +597,7 @@ main (int argc, char *argv[])
       std::cout << "Flow " << i->first << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")" << std::endl;;
       std::cout << "  Tx Packets: " << i->second.txPackets << std::endl;
       std::cout << "  Tx Bytes:   " << i->second.txBytes << std::endl;
-      std::cout << "  TxOffered:  " << i->second.txBytes * 8.0 / ((simulationTime - 1) * 1e6)  << " Mbps" << std::endl;;
+      std::cout << "  TxOffered:  " << i->second.txBytes * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6)  << " Mbps" << std::endl;;
       std::cout << "  Rx Packets: " << i->second.rxPackets << std::endl;;
       std::cout << "  Rx Bytes:   " << i->second.rxBytes << std::endl;
       std::cout << "  Throughput: " << i->second.rxBytes * 8.0 / ((simulationTime - 1) * 1e6)  << " Mbps" << std::endl;;
@@ -555,4 +614,112 @@ main (int argc, char *argv[])
   std::cout << "  Throughput (substract beamforming time): " << packetSink->GetTotalRx () * 8.0 / ((simulationTime - 1 - accuSweepTime.GetSeconds() ) * 1e6) << " Mbps" << std::endl;
 
   return 0;
+}
+
+
+
+ArrayXd music_algo(double *time, double *power,int numb_ante, int snap, int sour){
+
+    const std::complex<double> z(0, 1);
+    int M = numb_ante; /* Number of antenna elements */
+    double c = 3e8; 
+    double wavelength = c/5.18e9; /* In units of meters */
+    double frequency = c/wavelength;
+    double seperation = wavelength*0.5;
+    int angular_profile = 180; /* in number of intervals from 0 to 180*/
+
+    ArrayXd angle(angular_profile);
+    for (int i = 0; i<angular_profile; i++){
+        angle(i) = i*M_PI/(angular_profile-1);
+    }
+
+    MatrixXcd sensor_matrix(numb_ante,snap);
+    sensor_matrix = MatrixXcd::Zero(numb_ante,snap);
+    ArrayXcd calibration(snap);
+
+    MatrixXcd sensor_covariance(M,M);
+    sensor_covariance = MatrixXcd::Zero(M,M);
+
+    MatrixXcd E_matrix(M,M);
+     E_matrix = MatrixXcd::Zero(M,M);
+
+    MatrixXd posantenna(2,M);
+    for (int i = 0; i<M; i++){
+        posantenna(0,i) = i*seperation;
+        posantenna(1,i) = 0;
+    }
+    
+    MatrixXd anti_sym(M,M);
+    anti_sym = MatrixXd::Zero(M,M);
+    for(int i = 0; i<M;i++){
+        for(int j = 0; j<M;j++){
+            if (j+i == M-1){
+                anti_sym(i,j) = 1;
+            }
+        }
+    }
+
+    MatrixXcd atheta(M,angular_profile);
+    for (int i = 0; i<M;i++){
+        for (int j = 0; j<angular_profile;j++){
+            Vector2d vec(cos(angle(j)),sin(angle(j)));
+            double phase = -vec.dot(posantenna.col(i))/wavelength*2.0*M_PI;
+            atheta(i,j) = exp(z*phase);
+        }
+    }
+    
+    
+    for (int i  = 0; i<numb_ante; i++){
+        for (int j = 0; j<snap;j++){
+            for (int k = 0; k<sour;k++){
+                double t = *(time+(i*snap + j)*sour+k);
+                double p = *(power+(i*snap + j)*sour+k);
+                sensor_matrix(i,j) = sensor_matrix(i,j) + exp(z*2.0*M_PI*t*frequency*1e-9)*p;
+            }
+        }
+    }
+    for (int j = 0; j<snap; j++){
+        calibration(j) = exp(-z*arg(sensor_matrix(0,j)));
+    }
+    for (int i = 0; i<numb_ante;i++){
+        sensor_matrix.row(i) << sensor_matrix.row(i).array() * calibration.transpose();
+    }
+
+    for (int j = 0; j<snap; j++){
+    sensor_covariance = sensor_covariance + (anti_sym * sensor_matrix.col(j).adjoint().transpose())*(anti_sym * sensor_matrix.col(j).adjoint().transpose()).adjoint()/snap + sensor_matrix.col(j) * (sensor_matrix.col(j)).adjoint()/snap;
+    }
+
+    SelfAdjointEigenSolver<MatrixXcd> eigensolver(sensor_covariance);
+    if (eigensolver.info() != Success) abort();    
+
+    int number_of_sig = M;
+    for (int i = 0; i<M; i++){
+        if(eigensolver.eigenvalues()(i) < eigensolver.eigenvalues().maxCoeff()/100){
+            E_matrix.col(i) = eigensolver.eigenvectors().col(i);
+            number_of_sig--;            
+
+        }       
+    }
+
+    ArrayXd spatial_metric(angular_profile); 
+
+    for(int i = 0;i<angular_profile;i++){
+        spatial_metric(i) = 1/(atheta.col(i).adjoint()*E_matrix*E_matrix.adjoint()*atheta.col(i))(0,0).real();
+    }
+    spatial_metric = spatial_metric/spatial_metric.maxCoeff();
+
+
+    return spatial_metric; 
+}
+
+vector<int> FindLocalMax(vector<double> &vec){
+  vector<int> ret;
+
+  for (auto it = vec.begin(); it != vec.end(); ++it){
+    if (it == vec.begin() || it+1 == vec.end()) continue;
+    if (*(it -1) < *it && *(it + 1) < *it) 
+      ret.push_back(std::distance(vec.begin(), it));
+  }
+
+  return ret;
 }
